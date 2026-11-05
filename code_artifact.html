@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>お誕生日一番くじサプライズ</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&family=Great+Vibes&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        rounded: ['"M PLUS Rounded 1c"', 'sans-serif'],
+                        vibes: ['"Great Vibes"', 'cursive']
+                    },
+                    colors: {
+                        gold: {
+                            light: '#FFE57F',
+                            DEFAULT: '#D4AF37',
+                            dark: '#AA771C'
+                        },
+                        birthdayPink: {
+                            light: '#FFF0F5',
+                            DEFAULT: '#FF69B4',
+                            deep: '#FF1493'
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-subtle': 'bounceSubtle 2s infinite',
+                        'spin-slow': 'spin 8s linear infinite',
+                        'float': 'float 3s ease-in-out infinite'
+                    },
+                    keyframes: {
+                        bounceSubtle: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-8px)' }
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+                            '50%': { transform: 'translateY(-10px) rotate(2deg)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background: linear-gradient(135deg, #1a0b1c 0%, #2e1028 50%, #120715 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .gold-border {
+            border: 2px solid #D4AF37;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+        }
+        .ticket-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(212, 175, 55, 0.2);
+        }
+        .glass-panel {
+            background: rgba(30, 15, 30, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            color: #f8fafc;
+        }
+        /* 剥がしスタンプ風エフェクト */
+        .used-stamp {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg);
+            border: 4px solid #ef4444;
+            color: #ef4444;
+            font-size: 2.5rem;
+            font-weight: 900;
+            padding: 0.5rem 1.5rem;
+            border-radius: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 20;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+        }
+        .is-used .used-stamp {
+            opacity: 0.9;
+            transform: translate(-50%, -50%) rotate(-12deg) scale(1);
+        }
+        @keyframes shake {
+            0%, 100% { transform: rotate(0deg); }
+            20% { transform: rotate(-8deg) scale(1.05); }
+            40% { transform: rotate(8deg) scale(1.05); }
+            60% { transform: rotate(-6deg); }
+            80% { transform: rotate(6deg); }
+        }
+        .shaking {
+            animation: shake 0.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-slate-100">
+
+    <!-- ヘッダー -->
+    <header class="w-full py-4 px-6 text-center bg-black/40 backdrop-blur-md border-b border-white/10 sticky top-0 z-30">
+        <div class="flex items-center justify-between max-w-md mx-auto">
+            <span class="text-xs font-bold text-pink-400 uppercase tracking-widest bg-pink-950/60 px-3 py-1 rounded-full border border-pink-500/30">
+                <i class="fa-solid fa-crown text-gold mr-1"></i> Special Birthday Lottery
+            </span>
+            <button onclick="app.openCollection()" class="text-xs bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold px-3.5 py-1.5 rounded-full shadow-md hover:opacity-95 active:scale-95 transition">
+                <i class="fa-solid fa-ticket mr-1"></i> チケット一覧 (<span id="collected-count">0</span>/10)
+            </button>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 flex flex-col items-center justify-center p-4 max-w-md mx-auto w-full relative">
+
+        <!-- ステート1: ホーム・ガチャ開始前（通常またはURLパラメータ指定時） -->
+        <div id="view-home" class="w-full flex flex-col items-center text-center space-y-6">
+            <!-- 装飾タイトル -->
+            <div class="relative w-full py-6 px-4 rounded-3xl glass-panel gold-border ticket-shadow">
+                <div class="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-gold-dark via-gold to-gold-light text-slate-950 text-xs font-black px-4 py-1 rounded-full shadow">
+                    💎 QR連動・ハズレなしプレミアムくじ 💎
+                </div>
+                <h1 class="text-2xl md:text-3xl font-black text-white mt-2 mb-1 tracking-tight">
+                    <span id="partner-name-display" class="text-pink-300">愛しいあなた</span>の<br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-amber-300 font-vibes text-4xl md:text-5xl">Happy Birthday</span> 一番くじ
+                </h1>
+                <p id="home-subtitle" class="text-xs text-slate-300 mt-2">QRコードからのアクセスを確認しました！タップして運命の箱を開けよう！</p>
+            </div>
+
+            <!-- ガチャマシン風ビジュアル / ボックス -->
+            <div class="relative w-72 h-72 mx-auto flex items-center justify-center">
+                <!-- 外側の光る円 -->
+                <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-pink-500/30 via-gold/30 to-rose-500/30 opacity-85 animate-spin-slow blur-md"></div>
+                
+                <!-- カプセル親要素（クリック可能） -->
+                <div id="capsule-container" onclick="app.startGacha()" class="relative z-10 w-56 h-56 rounded-full bg-gradient-to-b from-slate-900 to-slate-950 border-4 border-gold shadow-2xl flex flex-col items-center justify-center p-4 animate-float cursor-pointer hover:scale-105 transition">
+                    <div class="absolute top-3 text-[10px] tracking-widest text-gold font-bold bg-amber-950/80 px-3 py-0.5 rounded-full border border-gold/40">
+                        TAP TO OPEN
+                    </div>
+                    <div class="text-pink-400 text-6xl my-2 animate-bounce-subtle">
+                        <i class="fa-solid fa-box-open drop-shadow-md"></i>
+                    </div>
+                    <p class="text-xs font-bold text-slate-200">ボックスをタップ！</p>
+                    <div class="mt-1 text-[11px] text-pink-300 font-semibold" id="target-id-badge-text">QRくじ演出モード</div>
+                </div>
+            </div>
+
+            <!-- ガチャを引くアクションボタン -->
+            <div class="w-full px-4 space-y-2">
+                <button onclick="app.startGacha()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white font-black text-lg shadow-xl shadow-pink-500/20 hover:opacity-95 active:scale-95 transition transform duration-150 flex items-center justify-center space-x-2 border-2 border-white/30">
+                    <i class="fa-solid fa-wand-magic-sparkles text-xl"></i>
+                    <span id="main-action-btn-text">ボックスを開けてくじを引く</span>
+                </button>
+                
+                <!-- パラメータがない場合のQRテスト用ピッカーを表示するボタン -->
+                <div id="qr-test-picker-wrap" class="hidden pt-1">
+                    <button onclick="app.openQrTestModal()" class="w-full py-2.5 rounded-xl bg-slate-900/80 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-slate-900 transition">
+                        <i class="fa-solid fa-qrcode mr-1"></i> 【テスト】紙のくじ(ID 1〜10)をシミュレートする
+                    </button>
+                </div>
+            </div>
+
+            <!-- 設定変更リンク -->
+            <button onclick="app.openSettings()" class="text-xs text-slate-400 hover:text-pink-400 underline transition mt-2">
+                <i class="fa-solid fa-gear mr-1"></i> お名前や内容を変更する
+            </button>
+        </div>
+
+        <!-- ステート2: ガチャ演出中（ローディング/オープン演出） -->
+        <div id="view-gacha-anim" class="hidden w-full flex flex-col items-center justify-center text-center space-y-8 py-12">
+            <div class="relative w-64 h-64 flex items-center justify-center">
+                <!-- 光のサークル -->
+                <div class="absolute inset-0 rounded-full bg-pink-500/30 animate-ping"></div>
+                <!-- 揺れるカプセルボックス -->
+                <div id="anim-box" class="w-44 h-44 rounded-3xl bg-gradient-to-br from-slate-900 to-rose-950 shadow-2xl border-4 border-gold flex items-center justify-center text-pink-400 text-7xl shaking z-10">
+                    <i class="fa-solid fa-gift"></i>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <h2 class="text-xl font-bold text-white animate-pulse" id="anim-status-text">サプライズボックスが開きます...✨</h2>
+                <p class="text-xs text-slate-400">ドキドキの瞬間をお楽しみください！</p>
+            </div>
+        </div>
+
+        <!-- ステート3: 当選結果表示 -->
+        <div id="view-result" class="hidden w-full flex flex-col items-center space-y-6 py-2">
+            <div class="text-center">
+                <span class="text-xs font-bold bg-amber-950/80 text-amber-300 px-3 py-1 rounded-full border border-amber-500/40">
+                    🎉 QRくじ 当選おめでとうございます！ 🎉
+                </span>
+            </div>
+
+            <!-- チケットカード -->
+            <div id="result-ticket-card" class="w-full bg-slate-900/90 text-slate-100 rounded-3xl p-6 gold-border ticket-shadow relative overflow-hidden transition transform duration-300">
+                <!-- 等級バッジ -->
+                <div class="flex justify-between items-center mb-4">
+                    <span id="res-badge" class="text-xs font-black px-3 py-1 rounded-full bg-pink-950 text-pink-300 border border-pink-500/40">
+                        特別賞
+                    </span>
+                    <span class="text-xs text-slate-400 font-mono" id="res-id">#01</span>
+                </div>
+
+                <!-- アイコン・タイトル -->
+                <div class="text-center my-6">
+                    <div id="res-icon" class="text-5xl text-pink-400 mb-4 inline-block p-4 bg-slate-950 rounded-2xl shadow-inner border border-white/5">
+                        <i class="fa-solid fa-heart"></i>
+                    </div>
+                    <h2 id="res-title" class="text-xl font-black text-white leading-snug">チケットタイトル</h2>
+                </div>
+
+                <!-- 詳細説明文 -->
+                <div class="bg-slate-950/80 rounded-2xl p-4 border border-white/5 mb-6">
+                    <p id="res-desc" class="text-sm text-slate-300 leading-relaxed font-medium">チケットの詳細な説明がここに入ります。</p>
+                </div>
+
+                <!-- 使用ボタン & スタンプ -->
+                <div class="relative">
+                    <button id="use-btn" onclick="app.useCurrentTicket()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold text-sm shadow-lg shadow-pink-500/30 hover:opacity-95 active:scale-95 transition">
+                        <i class="fa-solid fa-circle-check mr-1.5"></i> このチケットを使う（使用済みにする）
+                    </button>
+                    <div id="result-stamp" class="used-stamp top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                        USED
+                    </div>
+                </div>
+            </div>
+
+            <!-- アクションボタン群 -->
+            <div class="w-full flex space-x-3">
+                <button onclick="app.backToHome()" class="flex-1 py-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-bold text-sm hover:bg-slate-800 transition shadow-sm">
+                    <i class="fa-solid fa-house mr-1"></i> ホームへ戻る
+                </button>
+                <button onclick="app.openCollection()" class="flex-1 py-3 rounded-xl bg-pink-600 text-white font-bold text-sm hover:bg-pink-500 transition shadow-sm">
+                    <i class="fa-solid fa-list mr-1"></i> チケット一覧
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- モーダル: チケット一覧 (コレクション) -->
+    <div id="modal-collection" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-end md:items-center justify-center p-0 md:p-4">
+        <div class="bg-slate-900 text-slate-100 w-full max-w-md h-[85vh] md:h-[80vh] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-white/10 transform transition-transform duration-300">
+            <!-- モーダルヘッダー -->
+            <div class="p-4 border-b border-white/10 flex items-center justify-between bg-slate-950">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-full bg-pink-950 text-pink-400 flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-ticket"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white text-sm">獲得済みチケット一覧</h3>
+                        <p class="text-[10px] text-slate-400">これまでに引き当てた特別なプレゼント</p>
+                    </div>
+                </div>
+                <button onclick="app.closeCollection()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- チケットリスト本体 -->
+            <div id="collection-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <!-- 動的に生成されます -->
+            </div>
+
+            <!-- モーダルフッター -->
+            <div class="p-4 border-t border-white/10 bg-slate-950 text-center">
+                <button onclick="app.closeCollection()" class="w-full py-3 rounded-xl bg-slate-800 text-white font-bold text-sm hover:bg-slate-700 transition">
+                    とじる
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル: QRテスト選択（パラメータが無い場合に1〜10を選べる） -->
+    <div id="modal-qr-test" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 text-slate-100 border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-white text-base">
+                    <i class="fa-solid fa-qrcode text-pink-400 mr-1"></i> 紙のくじ番号を選択 (テスト)
+                </h3>
+                <button onclick="app.closeQrTestModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-400">QRコードを読み込んだときのURLパラメータ（例: ?id=3）をシミュレートします。</p>
+            <div class="grid grid-cols-5 gap-2 pt-2" id="qr-test-buttons">
+                <!-- 1〜10のボタンが動的に生成されます -->
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル: 設定（名前変更など） -->
+    <div id="modal-settings" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 text-slate-100 border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-white text-base">
+                    <i class="fa-solid fa-gear text-pink-400 mr-1"></i> サプライズ設定
+                </h3>
+                <button onclick="app.closeSettings()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">パートナーのお名前・愛称</label>
+                    <input type="text" id="input-partner-name" class="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-pink-500" placeholder="例: 〇〇ちゃん">
+                </div>
+                <p class="text-[11px] text-slate-400">※お名前を保存すると、タイトルやカードに反映されます。</p>
+            </div>
+            <div class="flex space-x-2 pt-2">
+                <button onclick="app.resetAllData()" class="px-3 py-2.5 rounded-xl bg-rose-950 text-rose-300 text-xs font-bold hover:bg-rose-900 transition border border-rose-800/50">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> データをリセット
+                </button>
+                <button onclick="app.saveSettings()" class="flex-1 py-2.5 rounded-xl bg-pink-600 text-white text-xs font-bold shadow hover:bg-pink-500 transition">
+                    保存する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知トースト -->
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900/95 border border-white/10 backdrop-blur text-white px-5 py-3 rounded-2xl text-xs font-bold shadow-xl z-50 transition-all duration-300 opacity-0 pointer-events-none translate-y-4">
+        トーストメッセージ
+    </div>
+
+    <!-- アプリケーションロジック -->
+    <script>
+        // 10種類の特別なプレゼント・体験チケットデータ（ID 1〜10 完全対応）
+        const ALL_TICKETS = [
+            {
+                id: 1,
+                badge: "プラチナ賞",
+                title: "次の週末、行きたかった場所へお出かけ券",
+                desc: "行きたいと言っていたあの場所へ！プランも交通手段もすべてエスコートしてお出かけするよ。",
+                icon: "fa-solid fa-map-location-dot"
+            },
+            {
+                id: 2,
+                badge: "ゴールド賞",
+                title: "おうち映画＆まったりポップコーン券",
+                desc: "お部屋を映画館仕様にして、好きなお菓子や飲み物を囲みながら朝まで映画を観る権利！",
+                icon: "fa-solid fa-film"
+            },
+            {
+                id: 3,
+                badge: "ハート賞",
+                title: "普段言えない感謝の長文メッセージカード",
+                desc: "照れくさくて普段言えない心からの「ありがとう」と大好きを、特別なお手紙にして贈ります。",
+                icon: "fa-solid fa-envelope-open-text"
+            },
+            {
+                id: 4,
+                badge: "スペシャル賞",
+                title: "どんなワガママでも1つだけ聞く券",
+                desc: "「これだけは叶えてほしい！」という願い事を、できる限り全力で叶えちゃう無敵のチケット。",
+                icon: "fa-solid fa-wand-magic-sparkles"
+            },
+            {
+                id: 5,
+                badge: "リラックス賞",
+                title: "極上の肩もみ＆マッサージ1時間券",
+                desc: "日頃の疲れを癒やします。アロママッサージや温かいタオル付きのフルリラクゼーションコース！",
+                icon: "fa-solid fa-hands-bubbles"
+            },
+            {
+                id: 6,
+                badge: "グルメ賞",
+                title: "大好物手料理フルコースごちそう券",
+                desc: "リクエストされたメニューを心を込めて手作り！前菜からデザートまでお店のようにおもてなし。",
+                icon: "fa-solid fa-utensils"
+            },
+            {
+                id: 7,
+                badge: "スイート賞",
+                title: "お気に入りのスイーツ大人買い券",
+                desc: "コンビニでもケーキ屋さんでも、今一番食べたいスイーツを好きなだけ選んで買ってもらえる券！",
+                icon: "fa-solid fa-cake-candles"
+            },
+            {
+                id: 8,
+                badge: "おまかせ賞",
+                title: "サプライズプチギフト引換券",
+                desc: "「ずっと欲しかったあれかも？」小さめだけど心がときめくサプライズプレゼントを後日お渡し！",
+                icon: "fa-solid fa-gift"
+            },
+            {
+                id: 9,
+                badge: "まったり賞",
+                title: "スマホオフでイチャイチャお昼寝券",
+                desc: "連絡やSNSをすべてお休みして、ただただお互いの温もりを感じながら一緒にのんびりお昼寝する時間。",
+                icon: "fa-solid fa-bed"
+            },
+            {
+                id: 10,
+                badge: "ラッキー賞",
+                title: "お掃除＆家事代行フリーパス券",
+                desc: "今日の家事や面倒なお片付けはすべてお任せ！ゆっくり自分の好きなことに時間を使ってね。",
+                icon: "fa-solid fa-broom"
+            }
+        ];
+
+        class BirthdayKujiApp {
+            constructor() {
+                this.partnerName = localStorage.getItem('bk_partner_name') || '愛しいあなた';
+                this.collected = JSON.parse(localStorage.getItem('bk_collected')) || [];
+                this.currentDrawnTicket = null;
+                
+                // URLパラメータ (id または ticket) の読み取り
+                this.urlTargetId = this.parseQueryParameter();
+                
+                this.init();
+            }
+
+            // URLクエリパラメータ解析
+            parseQueryParameter() {
+                const params = new URLSearchParams(window.location.search);
+                let idParam = params.get('id') || params.get('ticket') || params.get('no');
+                if(idParam) {
+                    const parsed = parseInt(idParam, 10);
+                    if(parsed >= 1 && parsed <= 10) {
+                        return parsed;
+                    }
+                }
+                return null;
+            }
+
+            init() {
+                this.updateUI();
+                this.setupQrTestModalButtons();
+                
+                // パラメータがある場合、まだコレクションに未登録なら自動追加用に保持しておく
+                if(this.urlTargetId) {
+                    document.getElementById('home-subtitle').innerHTML = `✨ 紙のくじ <span class="font-bold text-pink-400">ID: ${this.urlTargetId}</span> のQRコードからアクセスしました！`;
+                    document.getElementById('target-id-badge-text').innerText = `くじ ID: #${String(this.urlTargetId).padStart(2,'0')} 連動中`;
+                    document.getElementById('qr-test-picker-wrap').classList.remove('hidden');
+                } else {
+                    document.getElementById('home-subtitle').innerText = `QRコードやURLの指定がないため、ランダムまたは自由にくじを引けます。`;
+                    document.getElementById('target-id-badge-text').innerText = `ランダムお楽しみモード`;
+                    document.getElementById('qr-test-picker-wrap').classList.remove('hidden');
+                }
+            }
+
+            updateUI() {
+                document.getElementById('partner-name-display').innerText = this.partnerName;
+                document.getElementById('collected-count').innerText = this.collected.length;
+            }
+
+            // テストモーダルのボタン生成
+            setupQrTestModalButtons() {
+                const container = document.getElementById('qr-test-buttons');
+                container.innerHTML = '';
+                for(let i = 1; i <= 10; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = "py-2 rounded-xl bg-slate-950 text-pink-300 font-bold text-xs hover:bg-pink-600 hover:text-white transition border border-white/10";
+                    btn.innerText = `ID ${i}`;
+                    btn.onclick = () => {
+                        this.closeQrTestModal();
+                        // URLを書き換えずにシミュレート対象IDを設定
+                        this.urlTargetId = i;
+                        document.getElementById('home-subtitle').innerHTML = `✨ シミュレート中: <span class="font-bold text-pink-400">ID: ${i} のくじ</span>`;
+                        document.getElementById('target-id-badge-text').innerText = `くじ ID: #${String(i).padStart(2,'0')} 指定中`;
+                        this.showToast(`ID ${i} のくじをセットしました！`);
+                    };
+                    container.appendChild(btn);
+                }
+            }
+
+            openQrTestModal() {
+                document.getElementById('modal-qr-test').classList.remove('hidden');
+            }
+
+            closeQrTestModal() {
+                document.getElementById('modal-qr-test').classList.add('hidden');
+            }
+
+            // ガチャ開始アニメーション演出
+            startGacha() {
+                // ビュー切り替え
+                document.getElementById('view-home').classList.add('hidden');
+                document.getElementById('view-result').classList.add('hidden');
+                document.getElementById('view-gacha-anim').classList.remove('hidden');
+
+                const statusTexts = [
+                    "サプライズボックスを開けています...",
+                    "特別なチケットを読み込み中...",
+                    "ワクワクを演出しています..."
+                ];
+                let idx = 0;
+                const statusEl = document.getElementById('anim-status-text');
+                
+                const interval = setInterval(() => {
+                    idx = (idx + 1) % statusTexts.length;
+                    statusEl.innerText = statusTexts[idx];
+                }, 700);
+
+                // 2.2秒後に結果決定
+                setTimeout(() => {
+                    clearInterval(interval);
+                    this.determineTicket();
+                }, 2200);
+            }
+
+            // チケット決定ロジック（URLパラメータがあればそのID、なければランダム/未取得から選出）
+            determineTicket() {
+                let targetTicket = null;
+
+                if (this.urlTargetId) {
+                    // 指定されたIDのチケットを特定
+                    targetTicket = ALL_TICKETS.find(t => t.id === this.urlTargetId);
+                }
+
+                if (!targetTicket) {
+                    // パラメータがない場合は、まだ未取得のものをランダム、なければ完全ランダム
+                    const obtainedIds = this.collected.map(item => item.id);
+                    const available = ALL_TICKETS.filter(t => !obtainedIds.includes(t.id));
+                    
+                    if (available.length > 0) {
+                        const randomIndex = Math.floor(Math.random() * available.length);
+                        targetTicket = available[randomIndex];
+                    } else {
+                        const randomIndex = Math.floor(Math.random() * ALL_TICKETS.length);
+                        targetTicket = ALL_TICKETS[randomIndex];
+                    }
+                }
+
+                this.currentDrawnTicket = targetTicket;
+
+                // まだコレクションに登録されていなければ追加保存
+                const existing = this.collected.find(i => i.id === targetTicket.id);
+                let isAlreadyUsed = false;
+                if (!existing) {
+                    this.collected.push({
+                        id: targetTicket.id,
+                        isUsed: false,
+                        drawnAt: new Date().toLocaleDateString()
+                    });
+                    this.saveData();
+                } else {
+                    isAlreadyUsed = existing.isUsed;
+                }
+
+                // 画面表示へ切り替え
+                document.getElementById('view-gacha-anim').classList.add('hidden');
+                this.showResultView(this.currentDrawnTicket, isAlreadyUsed);
+
+                // 紙吹雪発動
+                this.fireConfetti();
+            }
+
+            // 結果画面のレンダリング
+            showResultView(ticket, isUsed) {
+                document.getElementById('res-badge').innerText = ticket.badge;
+                document.getElementById('res-id').innerText = `#${String(ticket.id).padStart(2, '0')}`;
+                document.getElementById('res-title').innerText = ticket.title;
+                document.getElementById('res-desc').innerText = ticket.desc;
+                document.getElementById('res-icon').innerHTML = `<i class="${ticket.icon}"></i>`;
+
+                const card = document.getElementById('result-ticket-card');
+                const useBtn = document.getElementById('use-btn');
+
+                if (isUsed) {
+                    card.classList.add('is-used');
+                    useBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    useBtn.disabled = true;
+                    useBtn.innerHTML = `<i class="fa-solid fa-check mr-1.5"></i> 使用済みです`;
+                } else {
+                    card.classList.remove('is-used');
+                    useBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    useBtn.disabled = false;
+                    useBtn.innerHTML = `<i class="fa-solid fa-circle-check mr-1.5"></i> このチケットを使う（使用済みにする）`;
+                }
+
+                document.getElementById('view-result').classList.remove('hidden');
+                this.updateUI();
+            }
+
+            // チケットを使用済みにする
+            useCurrentTicket() {
+                if(!this.currentDrawnTicket) return;
+                
+                const item = this.collected.find(i => i.id === this.currentDrawnTicket.id);
+                if(item) {
+                    item.isUsed = true;
+                    this.saveData();
+                }
+
+                const card = document.getElementById('result-ticket-card');
+                card.classList.add('is-used');
+                
+                const useBtn = document.getElementById('use-btn');
+                useBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                useBtn.disabled = true;
+                useBtn.innerHTML = `<i class="fa-solid fa-check mr-1.5"></i> 使用済みです`;
+
+                this.showToast("チケットを使用済みにしました 🎫");
+            }
+
+            // ホームへ戻る
+            backToHome() {
+                document.getElementById('view-result').classList.add('hidden');
+                document.getElementById('view-home').classList.remove('hidden');
+                this.updateUI();
+            }
+
+            // コレクション一覧モーダルを開く
+            openCollection() {
+                const listEl = document.getElementById('collection-list');
+                listEl.innerHTML = '';
+
+                if(this.collected.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="text-center py-12 text-slate-400">
+                            <i class="fa-solid fa-ticket text-4xl mb-2 text-slate-600"></i>
+                            <p class="text-xs">まだ獲得したチケットはありません。<br>ボックスを開けてみよう！</p>
+                        </div>
+                    `;
+                } else {
+                    const sorted = [...this.collected].sort((a, b) => a.id - b.id);
+                    sorted.forEach(item => {
+                        const ticketData = ALL_TICKETS.find(t => t.id === item.id);
+                        if(!ticketData) return;
+
+                        const cardDiv = document.createElement('div');
+                        cardDiv.className = `p-4 rounded-2xl border ${item.isUsed ? 'bg-slate-950/60 border-slate-800 opacity-70' : 'bg-slate-950 border-pink-500/30 shadow-sm'} relative overflow-hidden flex items-center justify-between cursor-pointer hover:border-pink-500 transition`;
+                        cardDiv.onclick = () => {
+                            this.closeCollection();
+                            this.currentDrawnTicket = ticketData;
+                            this.showResultView(ticketData, item.isUsed);
+                        };
+
+                        cardDiv.innerHTML = `
+                            <div class="flex items-center space-x-3">
+                                <div class="w-12 h-12 rounded-xl bg-slate-900 text-pink-400 flex items-center justify-center text-xl shrink-0 border border-white/5">
+                                    <i class="${ticketData.icon}"></i>
+                                </div>
+                                <div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-pink-950 text-pink-300">${ticketData.badge}</span>
+                                        <span class="text-[10px] text-slate-400 font-mono">#${String(ticketData.id).padStart(2,'0')}</span>
+                                    </div>
+                                    <h4 class="text-xs font-bold text-white mt-1 line-clamp-1">${ticketData.title}</h4>
+                                </div>
+                            </div>
+                            <div>
+                                ${item.isUsed ? '<span class="text-[10px] font-bold text-rose-400 bg-rose-950 px-2 py-1 rounded-full border border-rose-800">使用済</span>' : '<span class="text-xs text-pink-400 font-bold"><i class="fa-solid fa-chevron-right"></i></span>'}
+                            </div>
+                        `;
+                        listEl.appendChild(cardDiv);
+                    });
+                }
+
+                document.getElementById('modal-collection').classList.remove('hidden');
+            }
+
+            closeCollection() {
+                document.getElementById('modal-collection').classList.add('hidden');
+            }
+
+            // 設定モーダル
+            openSettings() {
+                document.getElementById('input-partner-name').value = this.partnerName;
+                document.getElementById('modal-settings').classList.remove('hidden');
+            }
+
+            closeSettings() {
+                document.getElementById('modal-settings').classList.add('hidden');
+            }
+
+            saveSettings() {
+                const nameInput = document.getElementById('input-partner-name').value.trim();
+                if(nameInput) {
+                    this.partnerName = nameInput;
+                    localStorage.setItem('bk_partner_name', this.partnerName);
+                }
+                this.closeSettings();
+                this.updateUI();
+                this.showToast("設定を保存しました ✨");
+            }
+
+            resetAllData() {
+                if(confirm("獲得したチケットや設定がすべてリセットされます。よろしいですか？")) {
+                    localStorage.removeItem('bk_collected');
+                    localStorage.removeItem('bk_partner_name');
+                    this.collected = [];
+                    this.partnerName = '愛しいあなた';
+                    this.closeSettings();
+                    this.backToHome();
+                    this.showToast("データをリセットしました");
+                }
+            }
+
+            saveData() {
+                localStorage.setItem('bk_collected', JSON.stringify(this.collected));
+            }
+
+            // 紙吹雪エフェクト
+            fireConfetti() {
+                try {
+                    confetti({
+                        particleCount: 120,
+                        spread: 80,
+                        origin: { y: 0.6 },
+                        colors: ['#ff69b4', '#d4af37', '#ffffff', '#ff1493', '#ffe57f']
+                    });
+                } catch(e) {
+                    console.log('Confetti load error', e);
+                }
+            }
+
+            // トースト通知表示
+            showToast(message) {
+                const toast = document.getElementById('toast');
+                toast.innerText = message;
+                toast.className = 'fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900/95 border border-white/10 backdrop-blur text-white px-5 py-3 rounded-2xl text-xs font-bold shadow-xl z-50 transition-all duration-300';
+                
+                setTimeout(() => {
+                    toast.className = 'fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900/95 border border-white/10 backdrop-blur text-white px-5 py-3 rounded-2xl text-xs font-bold shadow-xl z-50 transition-all duration-300 opacity-0 pointer-events-none translate-y-4';
+                }, 2500);
+            }
+        }
+
+        // アプリ初期化
+        const app = new BirthdayKujiApp();
+    </script>
+</body>
+</html>
